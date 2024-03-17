@@ -1,0 +1,13 @@
+beautifulsoup4==4.12.3
+deezer-python==6.1.1
+neo4j==5.17.0
+networkx==2.8.8
+node2vec==0.4.6
+numpy==1.26.4
+pandas==2.2.1
+tqdm==4.66.2
+python3-discogs-client==2.7
+python-dotenv==1.0.1
+fuzzywuzzy
+python-Levenshtein
+beautifulsoup4

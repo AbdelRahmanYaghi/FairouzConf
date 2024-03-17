@@ -1,0 +1,6 @@
+venv
+embeddings.txt
+__pycache__
+*.json
+*.parquet
+*.ttl
