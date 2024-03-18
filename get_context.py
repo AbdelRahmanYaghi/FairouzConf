@@ -19,45 +19,35 @@ for user in all_tracks:
                 'summary': '',
                 'emotional': ''
             }   
-        else:   
-            try:
+        else: 
+            for attempt in range(20):  
+                
                 lyrics_input['text'] = lyrics
                 headers = {
                     'Content-Type': 'application/json',
                     'Authorization': 'Bearer 543c7086-c880-45de-8bce-6c9c906293bb'
                 }
                 response = requests.post(metedata_url, json=lyrics_input, headers=headers)
-                response.json()['context']
-            except:
-                try:
-                    print('Failed Once, trying again...')
-                    response = requests.post(metedata_url, json=lyrics_input, headers=headers)
-                    response.json()['context']
-                except:
-                    try:
-                        print('Failed Twice, trying again...')
-                        response = requests.post(metedata_url, json=lyrics_input, headers=headers)
-                        response.json()['context']
-                    except:
-                        try:
-                            print('Failed Thrice, trying again...')
-                            response = requests.post(metedata_url, json=lyrics_input, headers=headers)
-                            response.json()['context']
-                        except Exception as e:
-                            print('Failed Four Times, skipping...')
-                            print(f'User: {user}')
-                            print(f'Track: {track_id}')
-                            print(f'Error Code: {e}')
-                            continue
-                                
-                        
+                
+                if 'context' in response.json():
+                    break
+                else:
+                    print('Trying... Attempt:', attempt+1)
+                    continue
 
-            all_tracks[user]['tracks'][track_id]['lyrics'] = {
-                'lyrics': lyrics,
-                'context': response.json()['context'],
-                'summary': response.json()['summary'],
-                'emotional': response.json()['emotional_context']
-            }
+            if 'context' not in response.json():
+                all_tracks[user]['tracks'][track_id]['lyrics'] = {
+                    'lyrics': lyrics,
+                    'context': '',
+                    'summary': '',
+                    'emotional': ''
+                } 
+            else: 
+                all_tracks[user]['tracks'][track_id]['lyrics'] = {
+                    'lyrics': lyrics,
+                    'context': response.json()['context'],
+                    'summary': response.json()['summary'],
+                    'emotional': response.json()['emotional_context']
+                }
 
 json.dump(all_tracks, open('tracks_contextualized.json', 'w'), indent=4)
-

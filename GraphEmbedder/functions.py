@@ -44,15 +44,15 @@ def get_tracks(spotify_playlist_id):
     songs_not_found = []
 
     for song_name, artist_name in tqdm(user_songs):
-        print(song_name, artist_name)
         song_name = sanitize(song_name)
         results = discogs.search(song_name, artist=artist_name, type='master')
         results = results.sort(key=lambda x: x.data.community.have, order='desc').filter(format='Album')
         result = 'id'+idify(f'{song_name}{artist_name}')
-        lyrics, genius_id = match_results(song_name, artist_name)
 
         try:
-            song = deezer.search(artist=artist_name, track=song_name)
+            song = deezer.search(query= f'{artist_name} {song_name}')
+            song[0]
+            lyrics, genius_id = match_results(song_name, artist_name)
             tracks[result] = {
                 'deezer_id': song[0].id,
                 'discogs_id': '',
@@ -70,13 +70,20 @@ def get_tracks(spotify_playlist_id):
                 if results[0].styles is not None:
                     genres.extend(results[0].styles)
                     
+                discogs_track_name = 'Not Found'
+                discogs_artist_name = 'Not Found'
                 for track in results[0].tracklist:
-                    if fuzz.ratio(song_name, track.title) >= 80 :
+                    if fuzz.partial_ratio(song_name, track.title) >= 70 :
+                        print(track.title, song_name)
                         discogs_track_name = track.title
                         discogs_artist_name = track.artists[0].name
-                    else:
-                        raise Exception(f"Track name {song_name} not found in Discogs. Found {track.title} instead.")
-
+                
+                if discogs_track_name == 'Not Found':
+                    print('oopsie, not found')
+                    raise Exception(f"Track name {song_name} not found in Discogs. Found {str(i) for i in results[0].tracklist} instead.")
+                
+                lyrics, genius_id = match_results(song_name, artist_name)
+                
                 tracks[result] = {
                     'deezer_id': '',
                     'discogs_id': results[0].id,
