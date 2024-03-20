@@ -1,3 +1,14 @@
+'''
+This script creates the graph embeddings for
+ the tracks in the dataset. It uses the node2vec
+ algorithm to create the embeddings. The embeddings
+ are saved in a parquet file. The embeddings are created
+ using a networkx graph, which was populated using the json
+ we retrieved from the graph database. The metadata for the
+ tracks is also saved in the parquet file, named 
+ 'graph_embeddings_data.parquet'.
+'''
+
 import networkx as nx
 from node2vec import Node2Vec
 import random 

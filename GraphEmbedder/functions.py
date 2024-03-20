@@ -18,6 +18,7 @@ import urllib.parse
 import requests
 from bs4 import BeautifulSoup
 from rdflib import Graph, Literal, Namespace, RDF, RDFS, XSD
+from SPARQLWrapper import SPARQLWrapper, JSON
 
 load_dotenv()
 
@@ -60,7 +61,7 @@ def get_tracks(spotify_playlist_id):
                 'artist_name': song[0].artist.name,
                 'album_name': song[0].album.title,
                 'genres': [i.name for i in song[0].album.genres],
-                'images': song[0].album.cover,
+                'images': song[0].album.cover_big,
                 'lyrics': lyrics,
                 'preview_url': song[0].preview
             }
@@ -92,7 +93,8 @@ def get_tracks(spotify_playlist_id):
                     'album_name': results[0].title.replace(discogs_artist_name, "").replace(" - ", "").replace("(", "").replace(")", "").replace("  ", " ").strip(),
                     'genres': genres,
                     'images': results[0].images[0]['uri'],
-                    'lyrics': lyrics
+                    'lyrics': lyrics,
+                    'preview_url': ''
                 }
             except Exception as e:
                 songs_not_found.append({'Song Name': song_name, 'Artist': artist_name, 'Error': str(e)})
@@ -282,7 +284,7 @@ def tracks_to_networkx(tracks_dict, graph):
             album_set.add(album_id)
 
 
-def tracks_to_graphdb(tracks_dict):
+def tracks_to_ttl(tracks_dict):
 
     ns = Namespace("http://psut.edu.jo/fAIrouz/")
 
@@ -310,10 +312,14 @@ def tracks_to_graphdb(tracks_dict):
             artist_name = track['artist_name']
             album_name = track['album_name']
             album_image = track['images']
+            deezer_id = track['deezer_id']
+            discogs_id = track['discogs_id']
 
             if track_id not in track_set:
                 g.add((ns[str(track_id)], RDF.type, ns.track))
                 g.add((ns[str(track_id)], RDFS.label, Literal(str(track_title), datatype = XSD.string)))
+                g.add((ns[str(track_id)], ns.deezer_id, Literal(str(deezer_id), datatype = XSD.string)))
+                g.add((ns[str(track_id)], ns.discogs_id, Literal(str(discogs_id), datatype = XSD.string)))
                 g.add((ns[str(track_id)], ns.title, Literal(str(track_title), datatype = XSD.string)))
                 g.add((ns[str(track_id)], ns.lyrics, Literal(str(track_lyrics), datatype = XSD.string)))
                 g.add((ns[str(track_id)], ns.preview_url, Literal(str(track_preview), datatype = XSD.string)))
@@ -463,5 +469,65 @@ def match_results(song_name, artist_name, threshold=60):
     
     
     return ('', '')
-        
+
+def get_graphdb_nodes():
+    sparql = SPARQLWrapper("http://localhost:7200/repositories/fAIrouz")
+
+    DOMAIN = 'http://psut.edu.jo/fAIrouz/'
+
+    # Define your SPARQL query to retrieve nodes
+    get_tracks_query = f"prefix ex: <{DOMAIN}>" +  """
+
+SELECT ?track_id ?track_title ?artist_name ?album_name ?deezer_id ?discogs_id ?lyrics ?image ?preview_url (GROUP_CONCAT(?genres_name; separator="[sep]") AS ?genres) WHERE {
+
+    ?track_id a ex:track;
+        ex:byArtist ?artist_id;
+        ex:partOfAlbum ?album_id;
+        ex:title ?track_title;
+        ex:preview_url ?preview_url;
+        ex:deezer_id ?deezer_id;
+        ex:discogs_id ?discogs_id;
+        ex:title ?album_title;
+        ex:lyrics ?lyrics.
     
+    OPTIONAL {
+        ?track_id ex:hasGenre ?genres_id.
+        ?genres_id a ex:genre;
+                   ex:name ?genres_name.
+    }
+    
+    ?artist_id a ex:artist;
+        ex:name ?artist_name.
+    
+    ?album_id a ex:album;
+        ex:title ?album_name;
+        ex:hasImage ?image.
+
+}
+GROUP BY ?track_id ?track_title ?artist_name ?album_name ?deezer_id ?discogs_id ?lyrics ?image ?preview_url
+    """
+
+    # Set the query and format to JSON
+    sparql.setQuery(get_tracks_query)
+    sparql.setReturnFormat(JSON)
+
+    # Execute the query
+    results = sparql.query().convert()
+
+    tracks = {}
+
+    for result in results["results"]["bindings"]:
+        track_id = result['track_id']['value']
+        tracks[track_id.replace(DOMAIN, '')] = {
+            'track_title': result['track_title']['value'],
+            'artist_name': result['artist_name']['value'],
+            'album_name': result['album_name']['value'],
+            'deezer_id': result['deezer_id']['value'],
+            'discogs_id': result['discogs_id']['value'],
+            'lyrics': result['lyrics']['value'],
+            'image': result['image']['value'],
+            'preview_url': result['preview_url']['value'],
+            'genres': result['genres']['value'].split('[sep]') if result['genres']['value'] != '' else []
+        }
+    
+    return tracks

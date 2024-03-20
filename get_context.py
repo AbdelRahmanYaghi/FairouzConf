@@ -1,3 +1,13 @@
+'''
+
+This script uses the lyrics of the songs
+ to get the context, summary and emotional
+ context of the song. It uses an API hosted
+ from another script to get the data. 
+ The data is then saved in a json file, named
+ 'tracks_contextualized.json'.
+'''
+
 import requests
 import json
 from tqdm import tqdm
