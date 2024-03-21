@@ -48,4 +48,4 @@ os.remove('Embeddings.txt')
 assert data[data['title'] == 'Chop Suey!'].drop(columns = ['title', 'type']).values.mean(axis =  1) == [0.05849004], 'The embeddings are not correct.'
 
 # Save the data
-data.to_parquet('graph_embeddings_data.parquet')
+data.to_parquet('graph_embeddings.parquet')

@@ -136,74 +136,72 @@ def tracks_to_cypher(tracks_dict):
     CREATE
 
     """
-    for user in tracks_dict:
-        tracks = tracks_dict[user]['tracks']
-        for track_id in tracks:  
-            #################
-            ### Add Track ###
-            #################
-            track = tracks[track_id]
-            
-            track_title = track['song_name']
-            artist_name = track['artist_name']
-            album_name = track['album_name']
-            album_image = track['images']
+    for track_id in tracks_dict:  
+        #################
+        ### Add Track ###
+        #################
+        track = tracks[track_id]
+        
+        track_title = track['song_name']
+        artist_name = track['artist_name']
+        album_name = track['album_name']
+        album_image = track['images']
 
-            if track_id not in track_set:
-                cqlCreate += f'({track_id}:track {{title:"{track_title}"}}),\n'
-            
-            artist_id = 'id' + idify('artist' +track['artist_name'])
-            album_id = 'id' + idify('album' +track['album_name'])
-            genres_id  = {}
+        if track_id not in track_set:
+            cqlCreate += f'({track_id}:track {{title:"{track_title}"}}),\n'
+        
+        artist_id = 'id' + idify('artist' +track['artist_name'])
+        album_id = 'id' + idify('album' +track['album_name'])
+        genres_id  = {}
 
-            for genre in track['genres']:
-                if isinstance(genre, str):
-                    genre_id = 'id' + idify('genre' + genre)
-                    genres_id[genre_id] = genre
-                else:
-                    genre_id = 'id' + idify('genre' + genre.name)
-                    genres_id[genre_id] = genre.name
-            #  = {'id' + idify('genre' + genre.name): genre  for genre in track['genres']}
+        for genre in track['genres']:
+            if isinstance(genre, str):
+                genre_id = 'id' + idify('genre' + genre)
+                genres_id[genre_id] = genre
+            else:
+                genre_id = 'id' + idify('genre' + genre.name)
+                genres_id[genre_id] = genre.name
+        #  = {'id' + idify('genre' + genre.name): genre  for genre in track['genres']}
 
-            ##################
-            ### Add Artist ###
-            ##################
+        ##################
+        ### Add Artist ###
+        ##################
 
-            if artist_id not in artist_set:
-                cqlCreate += f'({artist_id}:artist {{name:"{artist_name}"}}),\n'
+        if artist_id not in artist_set:
+            cqlCreate += f'({artist_id}:artist {{name:"{artist_name}"}}),\n'
 
-            #################
-            ### Add Album ###
-            #################
-            if album_id not in album_set and album_name != '':
-                cqlCreate += f'({album_id}:album {{title:"{album_name}", hasImage: "{album_image}"}}),\n'
-                cqlCreate += f'({album_id})-[:BY_ARTIST]->({artist_id}),\n'
+        #################
+        ### Add Album ###
+        #################
+        if album_id not in album_set and album_name != '':
+            cqlCreate += f'({album_id}:album {{title:"{album_name}", hasImage: "{album_image}"}}),\n'
+            cqlCreate += f'({album_id})-[:BY_ARTIST]->({artist_id}),\n'
 
-            ##################
-            ### Add Genres ###
-            ##################
+        ##################
+        ### Add Genres ###
+        ##################
 
+        for genre_id in genres_id:
+            if genre_id not in genre_set:
+                genre_name = genres_id[genre_id]
+                cqlCreate += f'({genre_id}:genre {{name:"{genre_name}"}}),\n'
+                genre_set.add(genre_id)
+
+
+        if track_id not in track_set:
             for genre_id in genres_id:
-                if genre_id not in genre_set:
-                    genre_name = genres_id[genre_id]
-                    cqlCreate += f'({genre_id}:genre {{name:"{genre_name}"}}),\n'
-                    genre_set.add(genre_id)
+                cqlCreate += f'({track_id})-[:HAS_GENRE]->({genre_id}),\n'
+            cqlCreate += f'({track_id})-[:BY_ARTIST]->({artist_id}),\n'
+            if album_name != '':
+                cqlCreate += f'({track_id})-[:PART_OF_ALBUM]->({album_id}),\n'
+        
+        # cqlCreate += f'({track_id})-[:LIKED_BY]->({user_id}),\n'
 
+        track_set.add(track_id)
+        artist_set.add(artist_id)
+        album_set.add(album_id)
 
-            if track_id not in track_set:
-                for genre_id in genres_id:
-                    cqlCreate += f'({track_id})-[:HAS_GENRE]->({genre_id}),\n'
-                cqlCreate += f'({track_id})-[:BY_ARTIST]->({artist_id}),\n'
-                if album_name != '':
-                    cqlCreate += f'({track_id})-[:PART_OF_ALBUM]->({album_id}),\n'
-            
-            # cqlCreate += f'({track_id})-[:LIKED_BY]->({user_id}),\n'
-
-            track_set.add(track_id)
-            artist_set.add(artist_id)
-            album_set.add(album_id)
-
-            cqlCreate += '\n'
+        cqlCreate += '\n'
 
     if cqlCreate[-3] == ',':
         cqlCreate = cqlCreate[:-3]
@@ -216,72 +214,70 @@ def tracks_to_networkx(tracks_dict, graph):
     album_set = set()
     genre_set = set()
 
-    for user in tracks_dict:
-        tracks = tracks_dict[user]['tracks']
-        for track_id in tracks:  
+    for track_id in tracks_dict:  
 
-            #################
-            ### Add Track ###
-            #################
-            track = tracks[track_id]
-            
-            track_title = track['song_name']
-            artist_name = track['artist_name']
-            album_name = track['album_name']
-            album_image = track['images']
+        #################
+        ### Add Track ###
+        #################
+        track = tracks[track_id]
+        
+        track_title = track['song_name']
+        artist_name = track['artist_name']
+        album_name = track['album_name']
+        album_image = track['images']
 
-            if track_id not in track_set:
-                graph.add_node(track_id, title=track_title, type='track')
-            
-            artist_id = 'id' + idify('artist' +track['artist_name'])
-            album_id = 'id' + idify('album' +track['album_name'])
-            genres_id  = {}
+        if track_id not in track_set:
+            graph.add_node(track_id, title=track_title, type='track')
+        
+        artist_id = 'id' + idify('artist' +track['artist_name'])
+        album_id = 'id' + idify('album' +track['album_name'])
+        genres_id  = {}
 
-            for genre in track['genres']:
-                if isinstance(genre, str):
-                    genre_id = 'id' + idify('genre' + genre)
-                    genres_id[genre_id] = genre
-                else:
-                    genre_id = 'id' + idify('genre' + genre.name)
-                    genres_id[genre_id] = genre.name
+        for genre in track['genres']:
+            if isinstance(genre, str):
+                genre_id = 'id' + idify('genre' + genre)
+                genres_id[genre_id] = genre
+            else:
+                genre_id = 'id' + idify('genre' + genre.name)
+                genres_id[genre_id] = genre.name
 
-            ##################
-            ### Add Artist ###
-            ##################
+        ##################
+        ### Add Artist ###
+        ##################
 
-            if artist_id not in artist_set:
-                graph.add_node(artist_id, name=artist_name, type='artist')
+        if artist_id not in artist_set:
+            graph.add_node(artist_id, name=artist_name, type='artist')
 
-            #################
-            ### Add Album ###
-            #################
-            if album_id not in album_set and album_name != '':
-                graph.add_node(album_id, title=album_name, hasImage=album_image, type='album')
-                graph.add_edge(album_id, artist_id, type='BY_ARTIST')
+        #################
+        ### Add Album ###
+        #################
+        if album_id not in album_set and album_name != '':
+            graph.add_node(album_id, title=album_name, hasImage=album_image, type='album')
+            graph.add_edge(album_id, artist_id, type='BY_ARTIST')
 
-            ##################
-            ### Add Genres ###
-            ##################
+        ##################
+        ### Add Genres ###
+        ##################
 
+        for genre_id in genres_id:
+            if genre_id not in genre_set:
+                genre_name = genres_id[genre_id]
+                graph.add_node(genre_id, name=genre_name, type='genre')
+                genre_set.add(genre_id)
+
+
+        if track_id not in track_set:
             for genre_id in genres_id:
-                if genre_id not in genre_set:
-                    genre_name = genres_id[genre_id]
-                    graph.add_node(genre_id, name=genre_name, type='genre')
-                    genre_set.add(genre_id)
+                graph.add_edge(track_id, genre_id, type='HAS_GENRE')
+            graph.add_edge(track_id, artist_id, type='BY_ARTIST')
+            if album_name != '':
+                graph.add_edge(track_id, album_id, type='PART_OF_ALBUM')
+        
+        # graph.add_edge(track_id, user_id, type='LIKED_BY')
 
-
-            if track_id not in track_set:
-                for genre_id in genres_id:
-                    graph.add_edge(track_id, genre_id, type='HAS_GENRE')
-                graph.add_edge(track_id, artist_id, type='BY_ARTIST')
-                if album_name != '':
-                    graph.add_edge(track_id, album_id, type='PART_OF_ALBUM')
-            
-            # graph.add_edge(track_id, user_id, type='LIKED_BY')
-
-            track_set.add(track_id)
-            artist_set.add(artist_id)
-            album_set.add(album_id)
+        track_set.add(track_id)
+        artist_set.add(artist_id)
+        album_set.add(album_id)
 
 
 def tracks_to_ttl(tracks_dict):
@@ -383,10 +379,10 @@ def tracks_to_ttl(tracks_dict):
             artist_set.add(artist_id)
             album_set.add(album_id)
 
-        turtle = g.serialize(format='turtle')
+    turtle = g.serialize(format='turtle')
 
-        with open('fairouz_abox.ttl', 'w', encoding='utf8') as f:
-            f.write(turtle)
+    with open('fairouz_abox.ttl', 'w', encoding='utf8') as f:
+        f.write(turtle)
 
 
 def get_lyrics(url):
@@ -531,3 +527,71 @@ GROUP BY ?track_id ?track_title ?artist_name ?album_name ?deezer_id ?discogs_id 
         }
     
     return tracks
+
+
+def tracks_to_dictionary(tracks_dict):
+    all_dict = {}
+
+    for track_id in tracks_dict:  
+
+        #################
+        ### Add Track ###
+        #################
+        track = tracks[track_id]
+        
+        track_title = track['song_name']
+        artist_name = track['artist_name']
+        album_name = track['album_name']
+        album_image = track['images']
+
+        if track_id not in all_dict.keys():
+            all_dict[track_id] = {
+                'title': track_title,
+                'type': 'track'
+            }
+
+        artist_id = 'id' + idify('artist' +track['artist_name'])
+        album_id = 'id' + idify('album' +track['album_name'])
+        genres_id  = {}
+
+        for genre in track['genres']:
+            if isinstance(genre, str):
+                genre_id = 'id' + idify('genre' + genre)
+                genres_id[genre_id] = genre
+            else:
+                genre_id = 'id' + idify('genre' + genre.name)
+                genres_id[genre_id] = genre.name
+        
+        ##################
+        ### Add Artist ###
+        ##################
+
+        if artist_id not in all_dict.keys():
+            all_dict[artist_id] = {
+                'name': artist_name,
+                'type': 'artist'
+            }
+
+        #################
+        ### Add Album ###
+        #################
+        if album_id not in all_dict.keys() and album_name != '':
+            all_dict[album_id] = {
+                'title': album_name,
+                'hasImage': album_image,
+                'type': 'album'
+            }
+
+        ##################
+        ### Add Genres ###
+        ##################
+
+        for genre_id in genres_id:
+            if genre_id not in  all_dict.keys():
+                genre_name = genres_id[genre_id]
+                all_dict[genre_id] = {
+                    'name': genre_name,
+                    'type': 'genre'
+                }
+
+    return all_dict
