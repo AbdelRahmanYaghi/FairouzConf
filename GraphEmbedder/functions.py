@@ -44,16 +44,16 @@ def get_tracks(spotify_playlist_id):
     tracks = {}
     songs_not_found = []
 
-    for song_name, artist_name in tqdm(user_songs):
-        song_name = sanitize(song_name)
-        results = discogs.search(song_name, artist=artist_name, type='master')
+    for track_title, artist_name in tqdm(user_songs):
+        track_title = sanitize(track_title)
+        results = discogs.search(track_title, artist=artist_name, type='master')
         results = results.sort(key=lambda x: x.data.community.have, order='desc').filter(format='Album')
-        result = 'id'+idify(f'{song_name}{artist_name}')
+        result = 'id'+idify(f'{track_title}{artist_name}')
 
         try:
-            song = deezer.search(query= f'{artist_name} {song_name}')
+            song = deezer.search(query= f'{artist_name} {track_title}')
             song[0]
-            lyrics, genius_id = match_results(song_name, artist_name)
+            lyrics, genius_id = match_results(track_title, artist_name)
             tracks[result] = {
                 'deezer_id': song[0].id,
                 'discogs_id': '',
@@ -61,7 +61,7 @@ def get_tracks(spotify_playlist_id):
                 'artist_name': song[0].artist.name,
                 'album_name': song[0].album.title,
                 'genres': [i.name for i in song[0].album.genres],
-                'images': song[0].album.cover_big,
+                'image': song[0].album.cover_big,
                 'lyrics': lyrics,
                 'preview_url': song[0].preview
             }
@@ -74,16 +74,16 @@ def get_tracks(spotify_playlist_id):
                 discogs_track_name = 'Not Found'
                 discogs_artist_name = 'Not Found'
                 for track in results[0].tracklist:
-                    if fuzz.partial_ratio(song_name, track.title) >= 70 :
-                        print(track.title, song_name)
+                    if fuzz.partial_ratio(track_title, track.title) >= 70 :
+                        print(track.title, track_title)
                         discogs_track_name = track.title
                         discogs_artist_name = track.artists[0].name
                 
                 if discogs_track_name == 'Not Found':
                     print('oopsie, not found')
-                    raise Exception(f"Track name {song_name} not found in Discogs. Found {str(i) for i in results[0].tracklist} instead.")
+                    raise Exception(f"Track name {track_title} not found in Discogs. Found {str(i) for i in results[0].tracklist} instead.")
                 
-                lyrics, genius_id = match_results(song_name, artist_name)
+                lyrics, genius_id = match_results(track_title, artist_name)
                 
                 tracks[result] = {
                     'deezer_id': '',
@@ -92,12 +92,12 @@ def get_tracks(spotify_playlist_id):
                     'artist_name': discogs_artist_name,
                     'album_name': results[0].title.replace(discogs_artist_name, "").replace(" - ", "").replace("(", "").replace(")", "").replace("  ", " ").strip(),
                     'genres': genres,
-                    'images': results[0].images[0]['uri'],
+                    'image': results[0].image[0]['uri'],
                     'lyrics': lyrics,
                     'preview_url': ''
                 }
             except Exception as e:
-                songs_not_found.append({'Song Name': song_name, 'Artist': artist_name, 'Error': str(e)})
+                songs_not_found.append({'Song Name': track_title, 'Artist': artist_name, 'Error': str(e)})
 
     print(f"Found tracks: {len(tracks)}\nNot found tracks: {len(songs_not_found)}")
     print(f"Perc of found tracks: {len(tracks) / (len(tracks) + len(songs_not_found)) * 100}%")
@@ -140,12 +140,12 @@ def tracks_to_cypher(tracks_dict):
         #################
         ### Add Track ###
         #################
-        track = tracks[track_id]
+        track = tracks_dict[track_id]
         
-        track_title = track['song_name']
+        track_title = track['track_title']
         artist_name = track['artist_name']
         album_name = track['album_name']
-        album_image = track['images']
+        album_image = track['image']
 
         if track_id not in track_set:
             cqlCreate += f'({track_id}:track {{title:"{track_title}"}}),\n'
@@ -219,12 +219,12 @@ def tracks_to_networkx(tracks_dict, graph):
         #################
         ### Add Track ###
         #################
-        track = tracks[track_id]
+        track = tracks_dict[track_id]
         
-        track_title = track['song_name']
+        track_title = track['track_title']
         artist_name = track['artist_name']
         album_name = track['album_name']
-        album_image = track['images']
+        album_image = track['image']
 
         if track_id not in track_set:
             graph.add_node(track_id, title=track_title, type='track')
@@ -307,7 +307,7 @@ def tracks_to_ttl(tracks_dict):
             track_preview = track['preview_url']
             artist_name = track['artist_name']
             album_name = track['album_name']
-            album_image = track['images']
+            album_image = track['image']
             deezer_id = track['deezer_id']
             discogs_id = track['discogs_id']
 
@@ -405,8 +405,8 @@ def get_lyrics(url):
 
 normalize_respose = lambda response: unicodedata.normalize("NFKD", response)
 
-def query_genius(song_name, artist_name=""):
-    search_query = f"{song_name} {artist_name}"
+def query_genius(track_title, artist_name=""):
+    search_query = f"{track_title} {artist_name}"
     encoded_search_query = urllib.parse.quote(search_query)
     genius_url = f"https://api.genius.com/search?q={encoded_search_query}"
     headers = {
@@ -431,19 +431,19 @@ def query_genius(song_name, artist_name=""):
 
     return all_items_list
 
-def match_results(song_name, artist_name, threshold=60):
+def match_results(track_title, artist_name, threshold=60):
 
     res = []  
-    song_name = sanitize(song_name)
-    results = query_genius(song_name, artist_name)
+    track_title = sanitize(track_title)
+    results = query_genius(track_title, artist_name)
 
     for result in results:
         
         title, title_with_featured, full_title, artist_name_, url, id_ = result.values()
 
-        title_match = fuzz.partial_ratio(song_name, title)
-        title_with_featured_match = fuzz.partial_ratio(song_name, title_with_featured)
-        full_title_match = fuzz.partial_ratio(song_name, full_title)
+        title_match = fuzz.partial_ratio(track_title, title)
+        title_with_featured_match = fuzz.partial_ratio(track_title, title_with_featured)
+        full_title_match = fuzz.partial_ratio(track_title, full_title)
         artist_name_match = fuzz.partial_ratio(artist_name, artist_name_)
         
         sum_match = (title_match + title_with_featured_match +
@@ -467,7 +467,7 @@ def match_results(song_name, artist_name, threshold=60):
     return ('', '')
 
 def get_graphdb_nodes():
-    sparql = SPARQLWrapper("http://localhost:7200/repositories/fAIrouz")
+    sparql = SPARQLWrapper("https://145a-188-123-166-163.ngrok-free.app/repositories/fAIrouz")
 
     DOMAIN = 'http://psut.edu.jo/fAIrouz/'
 
@@ -537,12 +537,12 @@ def tracks_to_dictionary(tracks_dict):
         #################
         ### Add Track ###
         #################
-        track = tracks[track_id]
+        track = tracks_dict[track_id]
         
-        track_title = track['song_name']
+        track_title = track['track_title']
         artist_name = track['artist_name']
         album_name = track['album_name']
-        album_image = track['images']
+        album_image = track['image']
 
         if track_id not in all_dict.keys():
             all_dict[track_id] = {
