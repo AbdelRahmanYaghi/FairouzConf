@@ -45,59 +45,85 @@ def get_tracks(spotify_playlist_id):
     songs_not_found = []
 
     for song_name, artist_name in tqdm(user_songs):
-        song_name = sanitize(song_name)
-        results = discogs.search(song_name, artist=artist_name, type='master')
-        results = results.sort(key=lambda x: x.data.community.have, order='desc').filter(format='Album')
-        result = 'id'+idify(f'{song_name}{artist_name}')
+        sanitized_song_name = sanitize(song_name)
+        result = 'id'+idify(f'{song_name} {artist_name}')
 
         try:
-            song = deezer.search(query= f'{artist_name} {song_name}')
-            song[0]
-            lyrics, genius_id = match_results(song_name, artist_name)
+            song = deezer.search(query= f'{artist_name} {sanitized_song_name}')
+
+            chosen_song = None
+
+            for song_id in range(len(song)):
+                fuzzy_ratio = fuzz.partial_ratio(song_name, song[song_id].title_short)
+
+                if fuzzy_ratio >= 75:
+                    chosen_song = song[song_id]
+                    break
+
+            ## Lazy transliteration
+            if chosen_song is None:
+                if len(song) == 0:
+                    raise Exception("Song not on deezer")
+                else:
+                    chosen_song = song[0]
+                
+            lyrics, genius_id = match_results(sanitized_song_name, artist_name)
+
             tracks[result] = {
-                'deezer_id': song[0].id,
+                'deezer_id': chosen_song.id,
                 'discogs_id': '',
-                'track_name': song[0].title_short ,
-                'artist_name': song[0].artist.name,
-                'album_name': song[0].album.title,
-                'genres': [i.name for i in song[0].album.genres],
-                'images': song[0].album.cover_big,
+                'track_name': chosen_song.title_short ,
+                'artist_name': chosen_song.artist.name,
+                'album_name': chosen_song.album.title,
+                'genres': [i.name for i in chosen_song.album.genres],
+                'images': chosen_song.album.cover_big,
                 'lyrics': lyrics,
-                'preview_url': song[0].preview
+                'preview_url': chosen_song.preview
             }
-        except:
-            try: 
-                genres = results[0].genres
-                if results[0].styles is not None:
-                    genres.extend(results[0].styles)
+        except Exception as edeezer:
+            songs_not_found.append({'Song Name': song_name, 'Artist': artist_name, 'ErrorDeezer': str(edeezer)})
+
+            # ## Despite the fact that I found more songs, I will only use the first one because it offers preview url.
+            # try: 
+            #     results = discogs.search(sanitized_song_name, artist=artist_name, type='master')
+            #     results = results.sort(key=lambda x: x.data.community.have, order='desc').filter(format='Album')
                     
-                discogs_track_name = 'Not Found'
-                discogs_artist_name = 'Not Found'
-                for track in results[0].tracklist:
-                    if fuzz.partial_ratio(song_name, track.title) >= 70 :
-                        print(track.title, song_name)
-                        discogs_track_name = track.title
-                        discogs_artist_name = track.artists[0].name
+            #     discogs_artist_name = None
+            #     discogs_track_title = None
+            #     chosen_index = -1
+
+            #     for results_index in range(len(results)):
+            #         if chosen_index != -1:
+            #             break
+            #         for track in results[results_index].tracklist:
+            #             if fuzz.partial_ratio(song_name, track.title) >= 70 :
+            #                 chosen_index = results_index
+            #                 discogs_artist_name = results[results_index].main_release.artists[0].name
+            #                 discogs_track_title = track.title
+            #                 break
+
+            #     if chosen_index == -1:
+            #         raise Exception(f"Track name {song_name} not found in Discogs. Found {[str(i) for i in results[0].tracklist]} instead.")
                 
-                if discogs_track_name == 'Not Found':
-                    print('oopsie, not found')
-                    raise Exception(f"Track name {song_name} not found in Discogs. Found {str(i) for i in results[0].tracklist} instead.")
+            #     genres = results[chosen_index].genres
+            #     if results[chosen_index].styles is not None:
+            #         genres.extend(results[chosen_index].styles)
                 
-                lyrics, genius_id = match_results(song_name, artist_name)
+            #     lyrics, genius_id = match_results(song_name, artist_name)
                 
-                tracks[result] = {
-                    'deezer_id': '',
-                    'discogs_id': results[0].id,
-                    'track_name': discogs_track_name,
-                    'artist_name': discogs_artist_name,
-                    'album_name': results[0].title.replace(discogs_artist_name, "").replace(" - ", "").replace("(", "").replace(")", "").replace("  ", " ").strip(),
-                    'genres': genres,
-                    'images': results[0].images[0]['uri'],
-                    'lyrics': lyrics,
-                    'preview_url': ''
-                }
-            except Exception as e:
-                songs_not_found.append({'Song Name': song_name, 'Artist': artist_name, 'Error': str(e)})
+            #     tracks[result] = {
+            #         'deezer_id': '',
+            #         'discogs_id': results[chosen_index].id,
+            #         'track_name': discogs_track_title,
+            #         'artist_name': discogs_artist_name,
+            #         'album_name': results[chosen_index].title.replace(discogs_artist_name, "").replace(" - ", "").replace("(", "").replace(")", "").replace("  ", " ").strip(),
+            #         'genres': genres,
+            #         'images': results[chosen_index].images[0]['uri'],
+            #         'lyrics': lyrics,
+            #         'preview_url': ''
+            #     }
+            # except Exception as e:
+            #     songs_not_found.append({'Song Name': song_name, 'Artist': artist_name, 'ErrorDeezer': str(edeezer), 'ErrorDiscogs': str(e)})
 
     print(f"Found tracks: {len(tracks)}\nNot found tracks: {len(songs_not_found)}")
     print(f"Perc of found tracks: {len(tracks) / (len(tracks) + len(songs_not_found)) * 100}%")
@@ -219,12 +245,12 @@ def tracks_to_networkx(tracks_dict, graph):
         #################
         ### Add Track ###
         #################
-        track = tracks[track_id]
+        track = tracks_dict[track_id]
         
-        track_title = track['song_name']
+        track_title = track['track_title']
         artist_name = track['artist_name']
         album_name = track['album_name']
-        album_image = track['images']
+        album_image = track['image']
 
         if track_id not in track_set:
             graph.add_node(track_id, title=track_title, type='track')
@@ -537,12 +563,12 @@ def tracks_to_dictionary(tracks_dict):
         #################
         ### Add Track ###
         #################
-        track = tracks[track_id]
+        track = tracks_dict[track_id]
         
-        track_title = track['song_name']
+        track_title = track['track_title']
         artist_name = track['artist_name']
         album_name = track['album_name']
-        album_image = track['images']
+        album_image = track['image']
 
         if track_id not in all_dict.keys():
             all_dict[track_id] = {
