@@ -35,7 +35,7 @@ for track_id in tqdm(all_tracks):
             
             headers = {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer 543c7086-c880-45de-8bce-6c9c906293bb'
+                'Authorization': '...'
             }
 
             response = requests.post(metedata_url, json=lyrics_input, headers=headers)
